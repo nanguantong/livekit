@@ -35,6 +35,7 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/atomic"
 	"go.uber.org/zap/zapcore"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/livekit/livekit-server/pkg/config"
 	"github.com/livekit/livekit-server/pkg/rtc/transport"
@@ -777,7 +778,7 @@ func (t *PCTransport) onDataChannel(dc *webrtc.DataChannel) {
 			for {
 				n, _, err := rawDC.ReadDataChannel(buffer)
 				if err != nil {
-					if !errors.Is(err, io.EOF) {
+					if !errors.Is(err, io.EOF) && !strings.Contains(err.Error(), "state=Closed") {
 						t.params.Logger.Warnw("error reading data channel", err, "label", dc.Label())
 					}
 					return
@@ -1038,7 +1039,20 @@ func (t *PCTransport) SendDataPacket(kind livekit.DataPacket_Kind, encoded []byt
 	if t.params.DatachannelSlowThreshold == 0 && t.params.DataChannelMaxBufferedAmount > 0 && dc.BufferedAmountGetter().BufferedAmount() > t.params.DataChannelMaxBufferedAmount {
 		return ErrDataChannelBufferFull
 	}
+
+	var dp livekit.DataPacket
+	if err := proto.Unmarshal(encoded, &dp); err != nil {
+		t.params.Logger.Warnw("failed to unmarshal data packet", err)
+	} else if u, ok := dp.Value.(*livekit.DataPacket_User); ok {
+		if strings.Contains(string(u.User.Payload), "test data") {
+			t.params.Logger.Debugw("send user data packet", "kind", kind, "pID", dp.ParticipantIdentity, "data", string(u.User.Payload))
+		}
+	}
 	_, err := dc.Write(encoded)
+
+	if err != nil {
+		t.params.Logger.Warnw("failed to send data packet", err)
+	}
 
 	return err
 }
