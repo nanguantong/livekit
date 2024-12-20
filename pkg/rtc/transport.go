@@ -1044,8 +1044,8 @@ func (t *PCTransport) SendDataPacket(kind livekit.DataPacket_Kind, encoded []byt
 	if err := proto.Unmarshal(encoded, &dp); err != nil {
 		t.params.Logger.Warnw("failed to unmarshal data packet", err)
 	} else if u, ok := dp.Value.(*livekit.DataPacket_User); ok {
-		if strings.Contains(string(u.User.Payload), "test data") {
-			t.params.Logger.Debugw("send user data packet", "kind", kind, "sender", dp.ParticipantIdentity, "data", string(u.User.Payload))
+		if strings.HasPrefix(string(u.User.Payload), dp.ParticipantIdentity) {
+			t.params.Logger.Debugw("send user data packet", "sender", dp.ParticipantIdentity, "dataLen", len(u.User.Payload))
 		}
 	}
 	_, err := dc.Write(encoded)
